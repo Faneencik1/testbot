@@ -39,7 +39,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def forward_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    media_group = []
     caption = f"Медиа от @{user.username} (ID: {user.id})"
     
     try:
@@ -65,7 +64,7 @@ async def forward_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Обрабатываем одиночные медиафайлы
         if update.message.photo:
             media = [InputMediaPhoto(media=update.message.photo[-1].file_id, 
-                                   caption=update.message.caption or caption)]
+                                  caption=update.message.caption or caption)]
         elif update.message.video:
             media = [InputMediaVideo(media=update.message.video.file_id, 
                                    caption=update.message.caption or caption)]
@@ -96,7 +95,7 @@ async def forward_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE
                     chat_id=ADMIN_ID,
                     media=context.user_data['media_group']
                 )
-                logger.info(f"Альбом ({len(context.user_data['media_group']} фото) от @{user.username}")
+                logger.info(f"Альбом ({len(context.user_data['media_group']}) фото от @{user.username}")
             
             context.user_data.pop('processing_media_group', None)
             context.user_data.pop('media_group', None)
@@ -104,7 +103,7 @@ async def forward_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE
             
     except Exception as e:
         logger.error(f"Ошибка пересылки медиа: {e}")
-        await update.message.reply_text("⚠️ Произошла ошибка при пересылке медиа.")
+        await update.message.reply_text("⚠️ Произошла ошибка при пересылке медиа")
 
 async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user

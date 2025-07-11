@@ -95,7 +95,7 @@ async def forward_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE
                     chat_id=ADMIN_ID,
                     media=context.user_data['media_group']
                 )
-            logger.info(f"Альбом ({len(context.user_data['media_group']}) фото от @{user.username}")
+            logger.info("Альбом из %d файлов от @%s", len(context.user_data['media_group']), user.username)
             
             context.user_data.pop('processing_media_group', None)
             context.user_data.pop('media_group', None)

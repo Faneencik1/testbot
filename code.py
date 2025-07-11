@@ -112,9 +112,16 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     logger.info(f"@{user.username} (ID: {user.id}): {text}")
 
     try:
+        # Первое сообщение - информация об отправителе
         await context.bot.send_message(
             chat_id=ADMIN_ID,
-            text=f"Сообщение от @{user.username} (ID: {user.id}):\n\n{text}"
+            text=f"Сообщение от @{user.username} (ID: {user.id}):"
+        )
+        
+        # Второе сообщение - текст сообщения
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=text
         )
         
         await update.message.reply_text("✅ Ваше сообщение было переслано!")

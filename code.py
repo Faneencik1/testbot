@@ -22,13 +22,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик команды /start"""
     user = update.effective_user
     logger.info(f"Пользователь @{user.username} (ID: {user.id}) запустил бота.")
     await update.message.reply_text("👋 Привет! Отправь мне сообщение, и я перешлю его создателю.")
 
 async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Пересылает сообщение админу в двух частях"""
     user = update.effective_user
     text = update.message.text
 
@@ -36,34 +34,51 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text("❌ Поддерживаются только текстовые сообщения.")
         return
 
-    # Логируем сообщение
     logger.info(f"@{user.username} (ID: {user.id}): {text}")
 
-    # Отправляем админу информацию об отправителе (первое сообщение)
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"Сообщение от @{user.username} (ID: {user.id}):"
-    )
-
-    # Отправляем текст сообщения (второе сообщение)
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=text
-    )
-
-    # Подтверждение отправителю
-    await update.message.reply_text("✅ Ваше сообщение было переслано создателю!")
+    try:
+        # Первое сообщение - информация об отправителе
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"Сообщение от @{user.username} (ID: {user.id}):"
+        )
+        
+        # Второе сообщение - текст
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=text
+        )
+        
+        await update.message.reply_text("✅ Ваше сообщение было переслано создателю!")
+    except Exception as e:
+        logger.error(f"Ошибка отправки: {e}")
 
 def main() -> None:
-    """Запуск бота"""
-    app = Application.builder().token(BOT_TOKEN).build()
+    """Запуск бота с обработкой конфликтов"""
+    try:
+        app = Application.builder().token(BOT_TOKEN).build()
 
-    # Регистрация обработчиков
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admin))
+        # Устанавливаем параметры long polling
+        app.updater = None  # Отключаем встроенный updater
+        app.job_queue.run_repeating(
+            callback=lambda ctx: None,
+            interval=60,
+            first=0
+        )
 
-    logger.info("🤖 Бот запущен!")
-    app.run_polling()
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admin))
+
+        logger.info("🤖 Бот запущен (без updater)!")
+        app.run_polling(
+            timeout=10,
+            connect_timeout=5,
+            pool_timeout=5,
+            stop_signals=None
+        )
+    except Exception as e:
+        logger.critical(f"Критическая ошибка: {e}")
+        raise
 
 if __name__ == "__main__":
     main()

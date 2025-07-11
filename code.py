@@ -54,27 +54,19 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.error(f"Ошибка отправки: {e}")
 
 def main() -> None:
-    """Запуск бота с обработкой конфликтов"""
+    """Запуск бота без использования JobQueue"""
     try:
         app = Application.builder().token(BOT_TOKEN).build()
-
-        # Устанавливаем параметры long polling
-        app.updater = None  # Отключаем встроенный updater
-        app.job_queue.run_repeating(
-            callback=lambda ctx: None,
-            interval=60,
-            first=0
-        )
 
         app.add_handler(CommandHandler("start", start))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admin))
 
-        logger.info("🤖 Бот запущен (без updater)!")
+        logger.info("🤖 Бот запущен!")
         app.run_polling(
+            poll_interval=1.0,
             timeout=10,
             connect_timeout=5,
-            pool_timeout=5,
-            stop_signals=None
+            pool_timeout=5
         )
     except Exception as e:
         logger.critical(f"Критическая ошибка: {e}")

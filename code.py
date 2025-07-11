@@ -28,14 +28,14 @@ async def is_admin(update: Update) -> bool:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     logger.info(f"Пользователь @{user.username} (ID: {user.id}) запустил бота.")
-    await update.message.reply_text("👋 Привет! Отправь мне сообщение, и я перешлю его создателю.")
+    await update.message.reply_text("👋 Привет! Отправь мне сообщение, после чего оно появится в канале.")
 
 async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     text = update.message.text
 
     if not text:
-        await update.message.reply_text("❌ Поддерживаются только текстовые сообщения.")
+        await update.message.reply_text("❌ На данный момент поддерживаются только текстовые сообщения.")
         return
 
     logger.info(f"@{user.username} (ID: {user.id}): {text}")
@@ -49,7 +49,7 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             chat_id=ADMIN_ID,
             text=text
         )
-        await update.message.reply_text("✅ Ваше сообщение было переслано создателю!")
+        await update.message.reply_text("✅ Ваше сообщение было переслано!")
     except Exception as e:
         logger.error(f"Ошибка отправки: {e}")
 

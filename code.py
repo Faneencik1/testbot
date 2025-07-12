@@ -1,14 +1,9 @@
 import os
 import logging
-from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
-    Updater
-)
+import asyncio
+from collections import defaultdict
+from telegram import Update, InputMediaPhoto, InputMediaVideo
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 
 # Настройка логирования
@@ -28,85 +23,131 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-async def send_sender_info(context, user):
-    """Отправляет информацию об отправителе отдельным сообщением"""
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"Сообщение от @{user.username} (ID: {user.id}):"
-    )
+class MediaGroupManager:
+    def __init__(self):
+        self.media_groups = defaultdict(list)
+        self.lock = asyncio.Lock()
+
+    async def process_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        
+        try:
+            # Видеосообщения (кружки)
+            if update.message.video_note:
+                await self.send_video_note(update, context, user)
+                return
+            
+            # Медиагруппы (альбомы)
+            if update.message.media_group_id:
+                await self.handle_media_group(update, context)
+                return
+            
+            # Одиночные медиа
+            await self.send_single_media(update, context, user)
+            
+        except Exception as e:
+            logger.error(f"Ошибка обработки медиа: {e}")
+
+    async def handle_media_group(self, update, context):
+        user = update.effective_user
+        media_group_id = update.message.media_group_id
+        
+        async with self.lock:
+            if update.message.photo:
+                media = InputMediaPhoto(
+                    media=update.message.photo[-1].file_id,
+                    caption=update.message.caption
+                )
+            elif update.message.video:
+                media = InputMediaVideo(
+                    media=update.message.video.file_id,
+                    caption=update.message.caption
+                )
+            else:
+                return
+
+            self.media_groups[media_group_id].append((media, user))
+            asyncio.create_task(self.send_media_group_delayed(media_group_id, context))
+
+    async def send_media_group_delayed(self, media_group_id, context):
+        await asyncio.sleep(3)  # Ожидание сбора всех медиа
+        
+        async with self.lock:
+            if media_group_id in self.media_groups:
+                media_list, users = zip(*self.media_groups[media_group_id])
+                user = users[0]
+                
+                try:
+                    await context.bot.send_message(
+                        chat_id=ADMIN_ID,
+                        text=f"Альбом из {len(media_list)} медиа от @{user.username} (ID: {user.id}):"
+                    )
+                    await context.bot.send_media_group(
+                        chat_id=ADMIN_ID,
+                        media=list(media_list)
+                    )
+                    logger.info(f"Отправлен альбом из {len(media_list)} медиа")
+                except Exception as e:
+                    logger.error(f"Ошибка отправки альбома: {e}")
+                finally:
+                    del self.media_groups[media_group_id]
+
+    async def send_video_note(self, update, context, user):
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"Видеосообщение от @{user.username} (ID: {user.id}):"
+            )
+            await context.bot.send_video_note(
+                chat_id=ADMIN_ID,
+                video_note=update.message.video_note.file_id
+            )
+            await update.message.reply_text("✅ Видеосообщение переслано!")
+        except Exception as e:
+            logger.error(f"Ошибка пересылки видеосообщения: {e}")
+
+    async def send_single_media(self, update, context, user):
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"Медиа от @{user.username} (ID: {user.id}):"
+            )
+
+            if update.message.photo:
+                await context.bot.send_photo(
+                    chat_id=ADMIN_ID,
+                    photo=update.message.photo[-1].file_id,
+                    caption=update.message.caption
+                )
+            elif update.message.video:
+                await context.bot.send_video(
+                    chat_id=ADMIN_ID,
+                    video=update.message.video.file_id,
+                    caption=update.message.caption
+                )
+            elif update.message.voice:
+                await context.bot.send_voice(
+                    chat_id=ADMIN_ID,
+                    voice=update.message.voice.file_id
+                )
+                
+            await update.message.reply_text("✅ Медиа переслано!")
+        except Exception as e:
+            logger.error(f"Ошибка пересылки медиа: {e}")
+
+media_manager = MediaGroupManager()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
-        "👋 Привет! Я буду пересылать твои сообщения в двух частях:\n"
-        "1. Информация об отправителе\n"
-        "2. Текст/медиа"
+        "👋 Бот работает! Отправьте:\n"
+        "- Текст\n- Фото/Видео\n- Видеосообщения\n- Голосовые"
     )
     logger.info(f"Пользователь @{user.username} запустил бота")
 
-async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    text = update.message.text
-
-    try:
-        await send_sender_info(context, user)
-        await context.bot.send_message(chat_id=ADMIN_ID, text=text)
-        await update.message.reply_text("✅ Сообщение переслано!")
-    except Exception as e:
-        logger.error(f"Ошибка пересылки текста: {e}")
-
-async def forward_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    try:
-        await send_sender_info(context, user)
-        await context.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=update.message.photo[-1].file_id,
-            caption=update.message.caption
-        )
-        await update.message.reply_text("✅ Фото переслано!")
-    except Exception as e:
-        logger.error(f"Ошибка пересылки фото: {e}")
-
-async def forward_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    try:
-        await send_sender_info(context, user)
-        await context.bot.send_video(
-            chat_id=ADMIN_ID,
-            video=update.message.video.file_id,
-            caption=update.message.caption
-        )
-        await update.message.reply_text("✅ Видео переслано!")
-    except Exception as e:
-        logger.error(f"Ошибка пересылки видео: {e}")
-
-async def forward_video_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    try:
-        await send_sender_info(context, user)
-        await context.bot.send_video_note(
-            chat_id=ADMIN_ID,
-            video_note=update.message.video_note.file_id
-        )
-        await update.message.reply_text("✅ Видеосообщение переслано!")
-    except Exception as e:
-        logger.error(f"Ошибка пересылки видеосообщения: {e}")
-
-async def forward_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    try:
-        await send_sender_info(context, user)
-        await context.bot.send_voice(
-            chat_id=ADMIN_ID,
-            voice=update.message.voice.file_id
-        )
-        await update.message.reply_text("✅ Голосовое сообщение переслано!")
-    except Exception as e:
-        logger.error(f"Ошибка пересылки голосового сообщения: {e}")
-
 async def get_log(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_user.id != ADMIN_ID:
+    user = update.effective_user
+    if user.id != ADMIN_ID:
         await update.message.reply_text("❌ Доступ запрещен")
         return
     
@@ -116,28 +157,42 @@ async def get_log(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             document=open("messages.log", "rb"),
             caption="📋 Логи бота"
         )
+        logger.info(f"Админ @{user.username} запросил логи")
     except Exception as e:
-        await update.message.reply_text("⚠️ Ошибка при отправке логов")
         logger.error(f"Ошибка отправки логов: {e}")
+        await update.message.reply_text("⚠️ Ошибка при отправке логов")
+
+async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    text = update.message.text
+    
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"Сообщение от @{user.username} (ID: {user.id}):\n\n{text}"
+        )
+        await update.message.reply_text("✅ Сообщение переслано!")
+    except Exception as e:
+        logger.error(f"Ошибка пересылки текста: {e}")
 
 def main() -> None:
+    # Убедитесь, что только один экземпляр бота запущен
     try:
-        # Создаем Application с Updater
-        application = Application.builder().token(BOT_TOKEN).build()
+        app = Application.builder().token(BOT_TOKEN).build()
         
-        # Регистрируем обработчики
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("getlog", get_log))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_text))
-        application.add_handler(MessageHandler(filters.PHOTO, forward_photo))
-        application.add_handler(MessageHandler(filters.VIDEO, forward_video))
-        application.add_handler(MessageHandler(filters.VIDEO_NOTE, forward_video_note))
-        application.add_handler(MessageHandler(filters.VOICE, forward_voice))
+        # Явно отключаем встроенный updater для избежания конфликтов
+        app.updater = None
+        
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("getlog", get_log))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_text))
+        app.add_handler(MessageHandler(
+            filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE | filters.VOICE,
+            media_manager.process_media
+        ))
 
-        logger.info("🟢 Бот запущен")
-        
-        # Запускаем бота с polling
-        application.run_polling(
+        logger.info("🟢 Бот запущен (без updater)")
+        app.run_polling(
             drop_pending_updates=True,
             allowed_updates=Update.ALL_TYPES
         )

@@ -169,7 +169,11 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         await context.bot.send_message(
             chat_id=ADMIN_ID,
-            text=f"Сообщение от @{user.username} (ID: {user.id}):\n\n{text}"
+            text=f"Сообщение от @{user.username} (ID: {user.id}):"
+        )
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"{text}"
         )
         await update.message.reply_text("✅ Сообщение переслано!")
     except Exception as e:
@@ -179,9 +183,6 @@ def main() -> None:
     # Убедитесь, что только один экземпляр бота запущен
     try:
         app = Application.builder().token(BOT_TOKEN).build()
-        
-        # Явно отключаем встроенный updater для избежания конфликтов
-        app.updater = None
         
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("getlog", get_log))

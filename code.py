@@ -69,14 +69,14 @@ class MediaGroupManager:
         self.media_groups[media_group_id].append((media, user))
         asyncio.create_task(self.send_media_group_delayed(media_group_id, context, update))  # Передаем update
 
-    async def send_media_group_delayed(self, media_group_id, context):
+    async def send_media_group_delayed(self, media_group_id, context, update):
         await asyncio.sleep(3)  # Ожидание сбора всех медиа
-        
+    
         async with self.lock:
             if media_group_id in self.media_groups:
                 media_list, users = zip(*self.media_groups[media_group_id])
                 user = users[0]
-                
+            
                 try:
                     await context.bot.send_message(
                         chat_id=ADMIN_ID,
@@ -86,10 +86,11 @@ class MediaGroupManager:
                         chat_id=ADMIN_ID,
                         media=list(media_list)
                     )
-                    await update.message.reply_text("✅ Альбом из {len(media_list)} медиа был переслан!")
-                    logger.info(f"@{user.username} (ID: {user.id}) отправил альбом из {len(media_list)} медиа")
+                    logger.info(f"Отправлен альбом из {len(media_list)} медиа")
+                    await update.message.reply_text("✅ Альбом переслан!")  # Теперь update доступен
                 except Exception as e:
                     logger.error(f"Ошибка отправки альбома: {e}")
+                    await update.message.reply_text("⚠️ Ошибка при пересылке альбома")
                 finally:
                     del self.media_groups[media_group_id]
 

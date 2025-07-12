@@ -21,6 +21,100 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
+class MediaGroupHandler:
+    def __init__(self):
+        self.media_groups = {}
+
+    async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        media_group_id = update.message.media_group_id
+
+        try:
+            # Для медиагрупп (альбомов)
+            if media_group_id:
+                if media_group_id not in self.media_groups:
+                    self.media_groups[media_group_id] = {
+                        'media': [],
+                        'sender_info': f"Альбом от @{user.username} (ID: {user.id}):"
+                    }
+
+                # Добавляем медиа в группу
+                if update.message.photo:
+                    media = InputMediaPhoto(media=update.message.photo[-1].file_id)
+                elif update.message.video:
+                    media = InputMediaVideo(media=update.message.video.file_id)
+                else:
+                    return
+
+                self.media_groups[media_group_id]['media'].append(media)
+                
+                # Ждем немного перед отправкой, чтобы собрать все медиа в группе
+                if len(self.media_groups[media_group_id]['media']) >= 1:
+                    await asyncio.sleep(2)  # Даем время для получения всех медиа в группе
+                    if media_group_id in self.media_groups:  # Проверяем, не была ли группа уже отправлена
+                        await self.send_media_group(context, media_group_id)
+                return
+            
+            # Одиночные медиафайлы
+            await self.send_single_media(update, context, user)
+            
+        except Exception as e:
+            logger.error(f"Ошибка обработки медиа: {e}")
+
+    async def send_media_group(self, context, media_group_id):
+        try:
+            group = self.media_groups.get(media_group_id)
+            if group and len(group['media']) > 0:
+                # Первое сообщение - информация об отправителе
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=group['sender_info']
+                )
+                
+                # Второе сообщение - весь альбом
+                await context.bot.send_media_group(
+                    chat_id=ADMIN_ID,
+                    media=group['media']
+                )
+                
+                # Удаляем отправленную группу
+                del self.media_groups[media_group_id]
+        except Exception as e:
+            logger.error(f"Ошибка отправки медиагруппы: {e}")
+
+    async def send_single_media(self, update, context, user):
+        try:
+            # Первое сообщение - информация об отправителе
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"Медиа от @{user.username} (ID: {user.id}):"
+            )
+
+            # Второе сообщение - медиафайл
+            if update.message.photo:
+                await context.bot.send_photo(
+                    chat_id=ADMIN_ID,
+                    photo=update.message.photo[-1].file_id,
+                    caption=update.message.caption
+                )
+            elif update.message.video:
+                await context.bot.send_video(
+                    chat_id=ADMIN_ID,
+                    video=update.message.video.file_id,
+                    caption=update.message.caption
+                )
+            elif update.message.voice:
+                await context.bot.send_voice(
+                    chat_id=ADMIN_ID,
+                    voice=update.message.voice.file_id
+                )
+                
+            await update.message.reply_text("✅ Ваше медиа было переслано!")
+        except Exception as e:
+            logger.error(f"Ошибка пересылки медиа: {e}")
+
+media_handler = MediaGroupHandler()
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     logger.info(f"Пользователь @{user.username} (ID: {user.id}) запустил бота.")
@@ -57,78 +151,7 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Ошибка отправки: {e}")
 
 async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    
-    try:
-        # Для медиагрупп (альбомов)
-        if update.message.media_group_id:
-            if 'media_group' not in context.chat_data:
-                context.chat_data['media_group'] = []
-                context.chat_data['sender_info'] = f"Альбом от @{user.username} (ID: {user.id}):"
-            
-            # Добавляем медиа в группу
-            if update.message.photo:
-                media = InputMediaPhoto(media=update.message.photo[-1].file_id)
-            elif update.message.video:
-                media = InputMediaVideo(media=update.message.video.file_id)
-            
-            context.chat_data['media_group'].append(media)
-            
-            # Если это последнее сообщение в группе
-            if len(context.chat_data['media_group']) >= 2:  # Можно увеличить для больших альбомов
-                await send_media_group(context, user)
-            return
-        
-        # Первое сообщение - информация об отправителе
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"Медиа от @{user.username} (ID: {user.id}):"
-        )
-
-        # Второе сообщение - медиафайл
-        if update.message.photo:
-            await context.bot.send_photo(
-                chat_id=ADMIN_ID,
-                photo=update.message.photo[-1].file_id,
-                caption=update.message.caption
-            )
-        elif update.message.video:
-            await context.bot.send_video(
-                chat_id=ADMIN_ID,
-                video=update.message.video.file_id,
-                caption=update.message.caption
-            )
-        elif update.message.voice:
-            await context.bot.send_voice(
-                chat_id=ADMIN_ID,
-                voice=update.message.voice.file_id
-            )
-            
-        await update.message.reply_text("✅ Ваше медиа было переслано!")
-    except Exception as e:
-        logger.error(f"Ошибка пересылки медиа: {e}")
-
-async def send_media_group(context: ContextTypes.DEFAULT_TYPE, user) -> None:
-    """Отправка собранной медиагруппы"""
-    try:
-        if 'media_group' in context.chat_data and len(context.chat_data['media_group']) > 0:
-            # Первое сообщение - информация об отправителе
-            await context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=context.chat_data['sender_info']
-            )
-            
-            # Второе сообщение - весь альбом
-            await context.bot.send_media_group(
-                chat_id=ADMIN_ID,
-                media=context.chat_data['media_group']
-            )
-            
-            # Очищаем данные
-            context.chat_data.pop('media_group', None)
-            context.chat_data.pop('sender_info', None)
-    except Exception as e:
-        logger.error(f"Ошибка обработки медиагруппы: {e}")
+    await media_handler.handle_media(update, context)
 
 def main() -> None:
     try:
@@ -146,4 +169,5 @@ def main() -> None:
         raise
 
 if __name__ == "__main__":
+    import asyncio
     main()

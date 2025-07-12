@@ -26,6 +26,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID"))
 class MediaGroupManager:
     def __init__(self):
         self.media_groups = defaultdict(list)
+        self.media_group_info = {}
         self.lock = asyncio.Lock()
 
     async def process_media_group(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -35,16 +36,24 @@ class MediaGroupManager:
         async with self.lock:
             try:
                 if media_group_id:
-                    # Создаем медиа объект
+                    # Создаем медиа объект с учетом подписи
                     if update.message.photo:
-                        media = InputMediaPhoto(media=update.message.photo[-1].file_id)
+                        media = InputMediaPhoto(
+                            media=update.message.photo[-1].file_id,
+                            caption=update.message.caption if update.message.caption else None
+                        )
                     elif update.message.video:
-                        media = InputMediaVideo(media=update.message.video.file_id)
+                        media = InputMediaVideo(
+                            media=update.message.video.file_id,
+                            caption=update.message.caption if update.message.caption else None
+                        )
                     else:
                         return
 
-                    # Добавляем в группу
-                    self.media_groups[media_group_id].append((media, user))
+                    # Добавляем в группу и сохраняем информацию о первом сообщении
+                    self.media_groups[media_group_id].append(media)
+                    if media_group_id not in self.media_group_info:
+                        self.media_group_info[media_group_id] = (user.username, user.id, update.message)
                     
                     # Запускаем отложенную отправку
                     asyncio.create_task(self.send_delayed_media_group(media_group_id, context))
@@ -60,29 +69,27 @@ class MediaGroupManager:
         await asyncio.sleep(3)  # Даем время для получения всех медиа в группе
         
         async with self.lock:
-            if media_group_id in self.media_groups:
-                media_list, users = zip(*self.media_groups[media_group_id])
-                user = users[0]  # Берем данные первого отправителя
+            if media_group_id in self.media_groups and media_group_id in self.media_group_info:
+                media_list = self.media_groups.pop(media_group_id)
+                username, user_id, first_message = self.media_group_info.pop(media_group_id)
                 
                 try:
                     # Первое сообщение - информация об отправителе
                     await context.bot.send_message(
                         chat_id=ADMIN_ID,
-                        text=f"Альбом из {len(media_list)} медиа от @{user.username} (ID: {user.id}):"
+                        text=f"Альбом из {len(media_list)} медиа от @{username} (ID: {user_id}):"
                     )
                     
-                    # Второе сообщение - весь альбом
+                    # Второе сообщение - весь альбом с сохранением подписей
                     await context.bot.send_media_group(
                         chat_id=ADMIN_ID,
-                        media=list(media_list)
+                        media=media_list
                     )
                     
+                    await first_message.reply_text("✅ Ваш альбом был переслан!")
                     logger.info(f"Отправлен альбом из {len(media_list)} медиа")
                 except Exception as e:
                     logger.error(f"Ошибка отправки медиагруппы: {e}")
-                finally:
-                    # Удаляем группу после отправки
-                    self.media_groups.pop(media_group_id, None)
 
     async def send_single_media(self, update, context, user):
         try:
@@ -92,7 +99,7 @@ class MediaGroupManager:
                 text=f"Медиа от @{user.username} (ID: {user.id}):"
             )
 
-            # Второе сообщение - медиафайл
+            # Второе сообщение - медиафайл с подписью (если есть)
             if update.message.photo:
                 await context.bot.send_photo(
                     chat_id=ADMIN_ID,

@@ -27,8 +27,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "👋 Привет! Я могу пересылать:\n"
         "- Текстовые сообщения\n"
-        "- Фотографии\n"
-        "- Видео\n"
+        "- Фотографии (с подписями)\n"
+        "- Видео (с подписями)\n"
         "- Голосовые сообщения\n\n"
         "Просто отправь мне что-нибудь!"
     )
@@ -66,16 +66,18 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             text=f"Медиафайл от @{user.username} (ID: {user.id}):"
         )
 
-        # Второе сообщение - сам медиафайл
+        # Второе сообщение - сам медиафайл с оригинальной подписью (если есть)
         if update.message.photo:
             await context.bot.send_photo(
                 chat_id=ADMIN_ID,
                 photo=update.message.photo[-1].file_id,
+                caption=update.message.caption  # Пересылаем оригинальную подпись
             )
         elif update.message.video:
             await context.bot.send_video(
                 chat_id=ADMIN_ID,
                 video=update.message.video.file_id,
+                caption=update.message.caption  # Пересылаем оригинальную подпись
             )
         elif update.message.voice:
             # Голосовое сообщение без подписи

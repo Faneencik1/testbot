@@ -62,10 +62,9 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     try:
         # Для медиагрупп (альбомов)
         if update.message.media_group_id:
-            if 'media_group' not in context.user_data:
-                context.user_data['media_group'] = []
-                context.user_data['media_group_id'] = update.message.media_group_id
-                context.user_data['sender_info'] = f"Альбом от @{user.username} (ID: {user.id}):"
+            if 'media_group' not in context.chat_data:
+                context.chat_data['media_group'] = []
+                context.chat_data['sender_info'] = f"Альбом от @{user.username} (ID: {user.id}):"
             
             # Добавляем медиа в группу
             if update.message.photo:
@@ -73,7 +72,11 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             elif update.message.video:
                 media = InputMediaVideo(media=update.message.video.file_id)
             
-            context.user_data['media_group'].append(media)
+            context.chat_data['media_group'].append(media)
+            
+            # Если это последнее сообщение в группе
+            if len(context.chat_data['media_group']) >= 2:  # Можно увеличить для больших альбомов
+                await send_media_group(context, user)
             return
         
         # Первое сообщение - информация об отправителе
@@ -105,26 +108,25 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         logger.error(f"Ошибка пересылки медиа: {e}")
 
-async def handle_media_group(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработка собранных медиагрупп"""
+async def send_media_group(context: ContextTypes.DEFAULT_TYPE, user) -> None:
+    """Отправка собранной медиагруппы"""
     try:
-        if 'media_group' in context.user_data and len(context.user_data['media_group']) > 0:
+        if 'media_group' in context.chat_data and len(context.chat_data['media_group']) > 0:
             # Первое сообщение - информация об отправителе
             await context.bot.send_message(
                 chat_id=ADMIN_ID,
-                text=context.user_data['sender_info']
+                text=context.chat_data['sender_info']
             )
             
             # Второе сообщение - весь альбом
             await context.bot.send_media_group(
                 chat_id=ADMIN_ID,
-                media=context.user_data['media_group']
+                media=context.chat_data['media_group']
             )
             
             # Очищаем данные
-            context.user_data.pop('media_group', None)
-            context.user_data.pop('media_group_id', None)
-            context.user_data.pop('sender_info', None)
+            context.chat_data.pop('media_group', None)
+            context.chat_data.pop('sender_info', None)
     except Exception as e:
         logger.error(f"Ошибка обработки медиагруппы: {e}")
 
@@ -136,9 +138,6 @@ def main() -> None:
         app.add_handler(CommandHandler("start", start))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_text))
         app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.VOICE, forward_media))
-        
-        # Обработчик для завершения медиагрупп
-        app.job_queue.run_repeating(handle_media_group, interval=5.0)
 
         logger.info("🤖 Бот запущен!")
         app.run_polling()

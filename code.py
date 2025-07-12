@@ -84,7 +84,6 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await context.bot.send_voice(
                 chat_id=ADMIN_ID,
                 voice=update.message.voice.file_id,
-                caption=caption
             )
             
         await update.message.reply_text("✅ Ваше медиа было переслано!")

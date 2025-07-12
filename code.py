@@ -71,13 +71,11 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await context.bot.send_photo(
                 chat_id=ADMIN_ID,
                 photo=update.message.photo[-1].file_id,
-                caption=f"Фото от @{user.username} (ID: {user.id})"
             )
         elif update.message.video:
             await context.bot.send_video(
                 chat_id=ADMIN_ID,
                 video=update.message.video.file_id,
-                caption=f"Видео от @{user.username} (ID: {user.id})"
             )
         elif update.message.voice:
             # Голосовое сообщение без подписи

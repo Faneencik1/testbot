@@ -1,6 +1,5 @@
 services:
   - type: web
     name: telegram-bot
+    runtime: python-3.12
     plan: free
-    healthCheckPath: /
-    healthCheckInterval: 5

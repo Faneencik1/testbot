@@ -36,6 +36,11 @@ class MediaGroupManager:
         async with self.lock:
             try:
                 if media_group_id:
+                    # Обработка видеосообщения (кружок)
+                    if update.message.video_note:
+                        await self.send_video_note(update, context, user)
+                        return
+                    
                     # Создаем медиа объект с учетом подписи
                     if update.message.photo:
                         media = InputMediaPhoto(
@@ -60,10 +65,32 @@ class MediaGroupManager:
                     return
                 
                 # Обработка одиночных медиа
-                await self.send_single_media(update, context, user)
+                if update.message.video_note:
+                    await self.send_video_note(update, context, user)
+                else:
+                    await self.send_single_media(update, context, user)
                 
             except Exception as e:
                 logger.error(f"Ошибка обработки медиа: {e}")
+
+    async def send_video_note(self, update, context, user):
+        """Обработка видеосообщений (кружков)"""
+        try:
+            # Первое сообщение - информация об отправителе
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"Видеосообщение от @{user.username} (ID: {user.id}):"
+            )
+            
+            # Второе сообщение - видеокружок
+            await context.bot.send_video_note(
+                chat_id=ADMIN_ID,
+                video_note=update.message.video_note.file_id
+            )
+            
+            await update.message.reply_text("✅ Ваше видеосообщение было переслано!")
+        except Exception as e:
+            logger.error(f"Ошибка пересылки видеосообщения: {e}")
 
     async def send_delayed_media_group(self, media_group_id, context):
         await asyncio.sleep(3)  # Даем время для получения всех медиа в группе
@@ -133,6 +160,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "- Текстовые сообщения\n"
         "- Фото (включая альбомы)\n"
         "- Видео\n"
+        "- Видеосообщения (кружки)\n"
         "- Голосовые сообщения\n\n"
         "Просто отправь мне что-нибудь!"
     )
@@ -170,7 +198,7 @@ def main() -> None:
         # Регистрируем обработчики
         app.add_handler(CommandHandler("start", start))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_text))
-        app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.VOICE, forward_media))
+        app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.VIDEO_NOTE | filters.VOICE, forward_media))
 
         logger.info("🤖 Бот запущен!")
         app.run_polling()

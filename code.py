@@ -58,7 +58,6 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    caption = f"Медиа от @{user.username} (ID: {user.id})"
     
     try:
         # Первое сообщение - информация об отправителе
@@ -72,18 +71,19 @@ async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await context.bot.send_photo(
                 chat_id=ADMIN_ID,
                 photo=update.message.photo[-1].file_id,
-                caption=caption
+                caption=f"Фото от @{user.username} (ID: {user.id})"
             )
         elif update.message.video:
             await context.bot.send_video(
                 chat_id=ADMIN_ID,
                 video=update.message.video.file_id,
-                caption=caption
+                caption=f"Видео от @{user.username} (ID: {user.id})"
             )
         elif update.message.voice:
+            # Голосовое сообщение без подписи
             await context.bot.send_voice(
                 chat_id=ADMIN_ID,
-                voice=update.message.voice.file_id,
+                voice=update.message.voice.file_id
             )
             
         await update.message.reply_text("✅ Ваше медиа было переслано!")

@@ -1,5 +1,7 @@
 import os
 import logging
+import asyncio
+from collections import defaultdict
 from telegram import Update, InputMediaPhoto, InputMediaVideo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
@@ -21,66 +23,66 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-class MediaGroupHandler:
+class MediaGroupManager:
     def __init__(self):
-        self.media_groups = {}
+        self.media_groups = defaultdict(list)
+        self.lock = asyncio.Lock()
 
-    async def handle_media(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def process_media_group(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
         media_group_id = update.message.media_group_id
 
-        try:
-            # Для медиагрупп (альбомов)
-            if media_group_id:
-                if media_group_id not in self.media_groups:
-                    self.media_groups[media_group_id] = {
-                        'media': [],
-                        'sender_info': f"Альбом от @{user.username} (ID: {user.id}):"
-                    }
+        async with self.lock:
+            try:
+                if media_group_id:
+                    # Создаем медиа объект
+                    if update.message.photo:
+                        media = InputMediaPhoto(media=update.message.photo[-1].file_id)
+                    elif update.message.video:
+                        media = InputMediaVideo(media=update.message.video.file_id)
+                    else:
+                        return
 
-                # Добавляем медиа в группу
-                if update.message.photo:
-                    media = InputMediaPhoto(media=update.message.photo[-1].file_id)
-                elif update.message.video:
-                    media = InputMediaVideo(media=update.message.video.file_id)
-                else:
+                    # Добавляем в группу
+                    self.media_groups[media_group_id].append((media, user))
+                    
+                    # Запускаем отложенную отправку
+                    asyncio.create_task(self.send_delayed_media_group(media_group_id, context))
                     return
+                
+                # Обработка одиночных медиа
+                await self.send_single_media(update, context, user)
+                
+            except Exception as e:
+                logger.error(f"Ошибка обработки медиа: {e}")
 
-                self.media_groups[media_group_id]['media'].append(media)
+    async def send_delayed_media_group(self, media_group_id, context):
+        await asyncio.sleep(3)  # Даем время для получения всех медиа в группе
+        
+        async with self.lock:
+            if media_group_id in self.media_groups:
+                media_list, users = zip(*self.media_groups[media_group_id])
+                user = users[0]  # Берем данные первого отправителя
                 
-                # Ждем немного перед отправкой, чтобы собрать все медиа в группе
-                if len(self.media_groups[media_group_id]['media']) >= 1:
-                    await asyncio.sleep(2)  # Даем время для получения всех медиа в группе
-                    if media_group_id in self.media_groups:  # Проверяем, не была ли группа уже отправлена
-                        await self.send_media_group(context, media_group_id)
-                return
-            
-            # Одиночные медиафайлы
-            await self.send_single_media(update, context, user)
-            
-        except Exception as e:
-            logger.error(f"Ошибка обработки медиа: {e}")
-
-    async def send_media_group(self, context, media_group_id):
-        try:
-            group = self.media_groups.get(media_group_id)
-            if group and len(group['media']) > 0:
-                # Первое сообщение - информация об отправителе
-                await context.bot.send_message(
-                    chat_id=ADMIN_ID,
-                    text=group['sender_info']
-                )
-                
-                # Второе сообщение - весь альбом
-                await context.bot.send_media_group(
-                    chat_id=ADMIN_ID,
-                    media=group['media']
-                )
-                
-                # Удаляем отправленную группу
-                del self.media_groups[media_group_id]
-        except Exception as e:
-            logger.error(f"Ошибка отправки медиагруппы: {e}")
+                try:
+                    # Первое сообщение - информация об отправителе
+                    await context.bot.send_message(
+                        chat_id=ADMIN_ID,
+                        text=f"Альбом из {len(media_list)} медиа от @{user.username} (ID: {user.id}):"
+                    )
+                    
+                    # Второе сообщение - весь альбом
+                    await context.bot.send_media_group(
+                        chat_id=ADMIN_ID,
+                        media=list(media_list)
+                    )
+                    
+                    logger.info(f"Отправлен альбом из {len(media_list)} медиа")
+                except Exception as e:
+                    logger.error(f"Ошибка отправки медиагруппы: {e}")
+                finally:
+                    # Удаляем группу после отправки
+                    self.media_groups.pop(media_group_id, None)
 
     async def send_single_media(self, update, context, user):
         try:
@@ -113,7 +115,8 @@ class MediaGroupHandler:
         except Exception as e:
             logger.error(f"Ошибка пересылки медиа: {e}")
 
-media_handler = MediaGroupHandler()
+# Глобальный менеджер медиагрупп
+media_manager = MediaGroupManager()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -151,7 +154,7 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Ошибка отправки: {e}")
 
 async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await media_handler.handle_media(update, context)
+    await media_manager.process_media_group(update, context)
 
 def main() -> None:
     try:
@@ -169,5 +172,4 @@ def main() -> None:
         raise
 
 if __name__ == "__main__":
-    import asyncio
     main()

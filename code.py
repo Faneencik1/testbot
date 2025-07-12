@@ -33,7 +33,7 @@ class MediaGroupManager:
         user = update.effective_user
         
         try:
-            # Обработка видеосообщения (кружка) - отдельный случай
+            # Обработка видеосообщения (кружка)
             if update.message.video_note:
                 await self.send_video_note(update, context, user)
                 return
@@ -148,16 +148,13 @@ class MediaGroupManager:
         except Exception as e:
             logger.error(f"Ошибка пересылки медиа: {e}")
 
-# Инициализация менеджера
-media_manager = MediaGroupManager()
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
-        "👋 Привет! Отправь мне:\n"
-        "- Текст\n- Фото\n- Видео\n"
-        "- Видеосообщения (кружки)\n"
-        "- Голосовые сообщения"
+        "👋 Привет! Я могу:\n"
+        "- Пересылать тексты/медиа\n"
+        "- Отправлять логи (/getlog)\n\n"
+        "Просто отправь мне что-нибудь!"
     )
     logger.info(f"Пользователь @{user.username} (ID: {user.id}) запустил бота.")
 
@@ -175,14 +172,42 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except Exception as e:
         logger.error(f"Ошибка: {e}")
 
+async def get_log(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отправка файла логов администратору"""
+    user = update.effective_user
+    
+    # Проверка что запрашивает администратор
+    if user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Эта команда только для администратора")
+        return
+    
+    try:
+        # Отправляем файл логов
+        await context.bot.send_document(
+            chat_id=ADMIN_ID,
+            document=open("messages.log", "rb"),
+            caption="📋 Логи бота"
+        )
+        logger.info(f"Администратор @{user.username} запросил логи")
+    except FileNotFoundError:
+        await update.message.reply_text("⚠️ Файл логов не найден")
+        logger.warning("Файл логов не найден")
+    except Exception as e:
+        await update.message.reply_text("⚠️ Ошибка при отправке логов")
+        logger.error(f"Ошибка отправки логов: {e}")
+
+# Инициализация менеджера
+media_manager = MediaGroupManager()
+
 async def forward_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await media_manager.process_media(update, context)
 
 def main() -> None:
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Обработчики с явным указанием типов медиа
+    # Регистрация обработчиков
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("getlog", get_log))
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND, 
         forward_text

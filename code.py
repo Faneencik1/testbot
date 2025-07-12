@@ -86,7 +86,8 @@ class MediaGroupManager:
                         chat_id=ADMIN_ID,
                         media=list(media_list)
                     )
-                    logger.info(f"Отправлен альбом из {len(media_list)} медиа")
+                    await update.message.reply_text("✅ Альбом из {len(media_list)} медиа был переслан!")
+                    logger.info(f"@{user.username} (ID: {user.id}) отправил альбом из {len(media_list)} медиа")
                 except Exception as e:
                     logger.error(f"Ошибка отправки альбома: {e}")
                 finally:
@@ -103,6 +104,7 @@ class MediaGroupManager:
                 video_note=update.message.video_note.file_id
             )
             await update.message.reply_text("✅ Видеосообщение переслано!")
+            logger.info(f"@{user.username} (ID: {user.id}) отправил видеосообщение")
         except Exception as e:
             logger.error(f"Ошибка пересылки видеосообщения: {e}")
 
@@ -132,6 +134,7 @@ class MediaGroupManager:
                 )
                 
             await update.message.reply_text("✅ Медиа переслано!")
+            logger.info(f"@{user.username} (ID: {user.id}) отправил медиафайл")
         except Exception as e:
             logger.error(f"Ошибка пересылки медиа: {e}")
 
@@ -140,8 +143,7 @@ media_manager = MediaGroupManager()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
-        "👋 Бот работает! Отправьте:\n"
-        "- Текст\n- Фото/Видео\n- Видеосообщения\n- Голосовые"
+        "👋 Бот работает! Отправьте любое сообщение в бота, и после модерации оно будет опубликовано в канале."
     )
     logger.info(f"Пользователь @{user.username} запустил бота")
 
@@ -176,6 +178,7 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             text=f"{text}"
         )
         await update.message.reply_text("✅ Сообщение переслано!")
+        logger.info(f"@{user.username} (ID: {user.id}) отправил текстовое сообщение: {text}")
     except Exception as e:
         logger.error(f"Ошибка пересылки текста: {e}")
 

@@ -1,9 +1,14 @@
 import os
 import logging
-import asyncio
-from collections import defaultdict
-from telegram import Update, InputMediaPhoto, InputMediaVideo
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+    Updater
+)
 from dotenv import load_dotenv
 
 # Настройка логирования
@@ -23,7 +28,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-async def send_sender_info(context, user, media_type="сообщение"):
+async def send_sender_info(context, user):
     """Отправляет информацию об отправителе отдельным сообщением"""
     await context.bot.send_message(
         chat_id=ADMIN_ID,
@@ -33,8 +38,7 @@ async def send_sender_info(context, user, media_type="сообщение"):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
-        "👋 Привет! Я буду пересылать твои сообщения.\n"
-        "Формат пересылки:\n"
+        "👋 Привет! Я буду пересылать твои сообщения в двух частях:\n"
         "1. Информация об отправителе\n"
         "2. Текст/медиа"
     )
@@ -45,23 +49,16 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     text = update.message.text
 
     try:
-        # Первое сообщение - информация об отправителе
         await send_sender_info(context, user)
-        
-        # Второе сообщение - текст
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=text
-        )
-        
-        await update.message.reply_text("✅ Ваше сообщение переслано!")
+        await context.bot.send_message(chat_id=ADMIN_ID, text=text)
+        await update.message.reply_text("✅ Сообщение переслано!")
     except Exception as e:
         logger.error(f"Ошибка пересылки текста: {e}")
 
 async def forward_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     try:
-        await send_sender_info(context, user, "фото")
+        await send_sender_info(context, user)
         await context.bot.send_photo(
             chat_id=ADMIN_ID,
             photo=update.message.photo[-1].file_id,
@@ -74,7 +71,7 @@ async def forward_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def forward_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     try:
-        await send_sender_info(context, user, "видео")
+        await send_sender_info(context, user)
         await context.bot.send_video(
             chat_id=ADMIN_ID,
             video=update.message.video.file_id,
@@ -87,7 +84,7 @@ async def forward_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def forward_video_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     try:
-        await send_sender_info(context, user, "видеосообщение")
+        await send_sender_info(context, user)
         await context.bot.send_video_note(
             chat_id=ADMIN_ID,
             video_note=update.message.video_note.file_id
@@ -99,7 +96,7 @@ async def forward_video_note(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def forward_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     try:
-        await send_sender_info(context, user, "голосовое сообщение")
+        await send_sender_info(context, user)
         await context.bot.send_voice(
             chat_id=ADMIN_ID,
             voice=update.message.voice.file_id
@@ -125,21 +122,22 @@ async def get_log(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def main() -> None:
     try:
-        app = Application.builder().token(BOT_TOKEN).build()
+        # Создаем Application с Updater
+        application = Application.builder().token(BOT_TOKEN).build()
         
-        # Явно отключаем встроенный updater для избежания конфликтов
-        app.updater = None
-        
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("getlog", get_log))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_text))
-        app.add_handler(MessageHandler(filters.PHOTO, forward_photo))
-        app.add_handler(MessageHandler(filters.VIDEO, forward_video))
-        app.add_handler(MessageHandler(filters.VIDEO_NOTE, forward_video_note))
-        app.add_handler(MessageHandler(filters.VOICE, forward_voice))
+        # Регистрируем обработчики
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("getlog", get_log))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_text))
+        application.add_handler(MessageHandler(filters.PHOTO, forward_photo))
+        application.add_handler(MessageHandler(filters.VIDEO, forward_video))
+        application.add_handler(MessageHandler(filters.VIDEO_NOTE, forward_video_note))
+        application.add_handler(MessageHandler(filters.VOICE, forward_voice))
 
         logger.info("🟢 Бот запущен")
-        app.run_polling(
+        
+        # Запускаем бота с polling
+        application.run_polling(
             drop_pending_updates=True,
             allowed_updates=Update.ALL_TYPES
         )

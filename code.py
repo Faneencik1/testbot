@@ -170,16 +170,22 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     text = update.message.text
     
     try:
+        # 1. Отправляем информацию об отправителе
         await context.bot.send_message(
             chat_id=ADMIN_ID,
             text=f"Сообщение от @{user.username} (ID: {user.id}):"
         )
+        
+        # 2. Отправляем текст сообщения отдельно
         await context.bot.send_message(
             chat_id=ADMIN_ID,
-            text=f"{text}"
+            text=text  # Только текст, без дублирования
         )
+        
+        # 3. Уведомляем пользователя об успешной пересылке
         await update.message.reply_text("✅ Сообщение переслано!")
         logger.info(f"@{user.username} (ID: {user.id}) отправил текстовое сообщение: {text}")
+        
     except Exception as e:
         logger.error(f"Ошибка пересылки текста: {e}")
 

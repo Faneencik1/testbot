@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: telegram-bot
+    plan: free
+    healthCheckPath: /
+    healthCheckInterval: 5

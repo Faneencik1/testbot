@@ -51,7 +51,7 @@ class MediaGroupManager:
     async def handle_media_group(self, update, context):
         user = update.effective_user
         media_group_id = update.message.media_group_id
-        
+    
         async with self.lock:
             if update.message.photo:
                 media = InputMediaPhoto(
@@ -66,8 +66,8 @@ class MediaGroupManager:
             else:
                 return
 
-            self.media_groups[media_group_id].append((media, user))
-            asyncio.create_task(self.send_media_group_delayed(media_group_id, context))
+        self.media_groups[media_group_id].append((media, user))
+        asyncio.create_task(self.send_media_group_delayed(media_group_id, context, update))  # Передаем update
 
     async def send_media_group_delayed(self, media_group_id, context):
         await asyncio.sleep(3)  # Ожидание сбора всех медиа

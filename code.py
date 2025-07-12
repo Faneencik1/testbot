@@ -146,7 +146,16 @@ async def forward_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     try:
-        app = Application.builder().token(BOT_TOKEN).build()
+        # Создаем приложение с включенным JobQueue
+        app = Application.builder() \
+            .token(BOT_TOKEN) \
+            .concurrent_updates(True) \
+            .job_queue(True) \
+            .build()
+        
+        # Проверяем инициализацию JobQueue
+        if not hasattr(app, 'job_queue') or app.job_queue is None:
+            raise RuntimeError("JobQueue не инициализирован")
         
         # Добавляем периодическую задачу (каждые 5 минут)
         app.job_queue.run_repeating(keep_alive, interval=300, first=10)
@@ -159,11 +168,12 @@ def main():
             media_manager.process_media
         ))
 
-        logger.info("🟢 Бот запущен с keep-alive")
+        logger.info("🟢 Бот запущен с JobQueue")
         app.run_polling(drop_pending_updates=True)
         
     except Exception as e:
-        logger.critical(f"🔴 Ошибка запуска: {e}")
+        logger.critical(f"🔴 Ошибка запуска: {str(e)}", exc_info=True)
+        raise
 
 if __name__ == "__main__":
     main()

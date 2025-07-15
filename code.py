@@ -44,6 +44,12 @@ async def forward_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE
     caption = f"Медиа от @{user.username} (ID: {user.id})"
     
     try:
+        # Сначала отправляем информацию об отправителе
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"Медиафайлы от @{user.username} (ID: {user.id}):"
+        )
+
         if update.message.media_group_id:
             if not context.user_data.get('processing_media_group'):
                 context.user_data['processing_media_group'] = True
@@ -61,43 +67,46 @@ async def forward_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data['media_group'].append(media)
             return
             
+        # Обработка одиночных медиафайлов
         if update.message.photo:
-            media = [InputMediaPhoto(media=update.message.photo[-1].file_id, 
-                                  caption=update.message.caption or caption)]
+            await context.bot.send_photo(
+                chat_id=ADMIN_ID,
+                photo=update.message.photo[-1].file_id,
+                caption=update.message.caption
+            )
         elif update.message.video:
-            media = [InputMediaVideo(media=update.message.video.file_id, 
-                                   caption=update.message.caption or caption)]
+            await context.bot.send_video(
+                chat_id=ADMIN_ID,
+                video=update.message.video.file_id,
+                caption=update.message.caption
+            )
         elif update.message.voice:
             await context.bot.send_voice(
                 chat_id=ADMIN_ID,
                 voice=update.message.voice.file_id,
-                caption=update.message.caption or caption
+                caption=update.message.caption
             )
             logger.info(f"Голосовое сообщение от @{user.username}")
             await update.message.reply_text("✅ Ваше голосовое сообщение переслано!")
             return
 
-        if media:
-            await context.bot.send_media_group(
-                chat_id=ADMIN_ID,
-                media=media
-            )
-            logger.info(f"Медиа от @{user.username} (ID: {user.id})")
-            await update.message.reply_text("✅ Ваши медиафайлы пересланы!")
-
+        # Обработка медиагрупп (альбомов)
         if 'processing_media_group' in context.user_data:
-            if len(context.user_data['media_group']) > 1:
-                context.user_data['media_group'][0].caption = context.user_data['caption']
+            if len(context.user_data['media_group']) > 0:
+                # Отправляем медиагруппу отдельным сообщением
                 await context.bot.send_media_group(
                     chat_id=ADMIN_ID,
                     media=context.user_data['media_group']
                 )
-            logger.info("Альбом из %d файлов от @%s", len(context.user_data['media_group']), user.username)
+                logger.info(f"Альбом из {len(context.user_data['media_group'])} файлов от @{user.username}")
             
             context.user_data.pop('processing_media_group', None)
             context.user_data.pop('media_group', None)
             context.user_data.pop('caption', None)
             
+        await update.message.reply_text("✅ Ваши медиафайлы пересланы!")
+        logger.info(f"Медиа от @{user.username} (ID: {user.id})")
+
     except Exception as e:
         logger.error(f"Ошибка пересылки медиа: {e}")
         await update.message.reply_text("⚠️ Произошла ошибка при пересылке медиа")

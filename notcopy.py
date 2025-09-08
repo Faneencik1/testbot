@@ -10,7 +10,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Токен вашего бота (получите у @BotFather)
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = "8018300330:AAEuB_STqH_5mAz8A6VPQqOJR4se4ZHI6m8"
 
 # Текст ответа
 RESPONSE_TEXT = (

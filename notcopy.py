@@ -10,7 +10,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Токен вашего бота (получите у @BotFather)
-BOT_TOKEN = 8018300330:AAEuB_STqH_5mAz8A6VPQqOJR4se4ZHI6m8
+BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
 
 # Текст ответа
 RESPONSE_TEXT = (
@@ -27,17 +27,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(RESPONSE_TEXT)
 
-# Обработчик всех текстовых сообщений
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_message = update.message.text
-    user_name = update.message.from_user.first_name
-    
-    logger.info(f"Пользователь {user_name} отправил: {user_message}")
-    
-    # Отправляем стандартный ответ
-    await update.message.reply_text(RESPONSE_TEXT)
-
-# Обработчик всех типов сообщений (текст, фото, видео, документы и т.д.)
+# Обработчик всех типов сообщений
 async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.first_name
     message_type = update.message.content_type

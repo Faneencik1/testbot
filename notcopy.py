@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 # Токен вашего бота (получите у @BotFather)
 BOT_TOKEN = "8018300330:AAEuB_STqH_5mAz8A6VPQqOJR4se4ZHI6m8"
+PORT = int(os.environ.get('PORT', 5000)) 
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
 
 # Текст ответа
 RESPONSE_TEXT = (
@@ -41,23 +43,31 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Ошибка при обработке сообщения: {context.error}")
 
-def main():
-    # Создаем приложение
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Добавляем обработчики команд
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
-    
-    # Добавляем обработчик для всех типов сообщений
-    application.add_handler(MessageHandler(filters.ALL, handle_all_messages))
-    
-    # Обработчик ошибок
-    application.add_error_handler(error_handler)
-    
-    # Запускаем бота
-    print("Бот запущен...")
-    application.run_polling()
+def main() -> None:
+    app = Application.builder().token(BOT_TOKEN).build()
+
+    # Регистрируем обработчики
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("getlog", get_log))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_text))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.VOICE, forward_media_group))
+
+    # Определяем режим работы
+    if WEBHOOK_URL and os.environ.get('RENDER'):
+        logger.info("🚀 Запуск в режиме webhook (Render)")
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=BOT_TOKEN,
+            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+        )
+    else:
+        logger.info("🔄 Запуск в режиме polling (локально)")
+        app.run_polling(
+            poll_interval=1.0,
+            timeout=10,
+            allowed_updates=Update.ALL_TYPES
+        )
 
 if __name__ == "__main__":
     main()
